@@ -7,7 +7,7 @@
 // Structures
 typedef struct Command {
     char *command;
-    char *operator;  // Operator that follows this command (&&, ||, or NULL)
+    char *operator;  
 } Command;
 
 // Function prototypes
@@ -21,10 +21,7 @@ int executeCommands(Command* commands, int n);
 void rot13(char *str);
 char* trim(char* str);
 
-/**
- * Trim leading and trailing whitespace
- * Returns a pointer within the original string - do not free this pointer separately
- */
+
 char* trim(char* str) {
     if (!str) return NULL;
     
@@ -42,9 +39,7 @@ char* trim(char* str) {
     return str;
 }
 
-/**
- * Main shell function
- */
+
 void cash() {
     char buff[1024] = {0};
     int buff_pos = 0;
@@ -62,7 +57,6 @@ void cash() {
             
         int line_len = strlen(line);
         
-        // Remove trailing newline
         if (line_len > 0 && line[line_len-1] == '\n') {
             line[--line_len] = '\0';
         }
@@ -76,7 +70,6 @@ void cash() {
             continuation = 0;
         }
         
-        // Append this line to our command buffer
         strcpy(buff + buff_pos, line);
         buff_pos += line_len;
         
@@ -94,9 +87,6 @@ void cash() {
     }
 }
 
-/**
- * Execute a sequence of commands, handling subshells and logical operators
- */
 int executeCommandSequence(char* command) {
     command = trim(strdup(command));
     
@@ -129,8 +119,6 @@ int executeCommandSequence(char* command) {
             waitpid(pid, &status, 0);
             int subshellResult = WIFEXITED(status) && WEXITSTATUS(status) == 0;
             
-            // If this is a simple subshell command (not part of a larger command),
-            // return the result and free resources
             if (command[0] == '(' && command[len-1] == ')' && 
                 !strstr(command, "&&") && !strstr(command, "||")) {
                 free(subshellCmd);
@@ -138,8 +126,7 @@ int executeCommandSequence(char* command) {
                 return subshellResult;
             }
             
-            // For test cases like "(exit 0 && exit 1) && echo-rot13 foo"
-            // We need to process the larger command using the result from the subshell
+            
             char* remainingCmd = NULL;
             
             // Check if there's a larger command after the subshell
@@ -203,9 +190,6 @@ int executeCommandSequence(char* command) {
     return result;
 }
 
-/**
- * Parse the input string into a sequence of commands with operators
- */
 Command* parseInput(char *buff, int *ncom) {
     // Preprocess buff to handle subshells as atomic commands
     char* processedBuff = strdup(buff);
@@ -304,62 +288,49 @@ Command* parseInput(char *buff, int *ncom) {
     return commands;
 }
 
-/**
- * Execute a sequence of commands with logical operators
- */
+
 int executeCommands(Command* commands, int n) {
-    int prevCmd = 1;  // Initialize to success for first command
+    int prevCmd = 1;  
     
     for (int i = 0; i < n; i++) {
-        // Determine whether to execute this command based on logical operators
+       
         int shouldExecute = 0;
         
         if (i == 0) {
-            // First command always executes
             shouldExecute = 1;
         } else if (strcmp(commands[i-1].operator, "&&") == 0) {
-            // Execute if previous command succeeded
             shouldExecute = (prevCmd == 1);
         } else if (strcmp(commands[i-1].operator, "||") == 0) {
-            // Execute if previous command failed
             shouldExecute = (prevCmd == 0);
         }
         
         if (shouldExecute) {
-            // Process semicolons in the command (multiple commands)
             char* cmd_copy = strdup(commands[i].command);
             char* token;
             char* saveptr;
             int lastResult = 1;
             
-            // Process each command separated by semicolons
             token = strtok_r(cmd_copy, ";", &saveptr);
             while (token != NULL) {
                 char* clean_token = trim(token);
                 
-                // Skip empty commands
                 if (strlen(clean_token) > 0) {
-                    // Check if this is a subshell command (enclosed in parentheses)
                     int len = strlen(clean_token);
                     if (len >= 2 && clean_token[0] == '(' && clean_token[len-1] == ')') {
-                        // Extract and execute the subshell command
                         char* subshellCmd = malloc(len - 1);
                         strncpy(subshellCmd, clean_token + 1, len - 2);
                         subshellCmd[len - 2] = '\0';
                         
-                        // Execute in a child process
                         pid_t pid = fork();
                         if (pid == -1) {
                             perror("fork failed");
                             free(subshellCmd);
                             lastResult = 0;
                         } else if (pid == 0) {
-                            // Child process - execute subshell commands
                             int result = executeCommandSequence(subshellCmd);
                             free(subshellCmd);
                             exit(result ? EXIT_SUCCESS : EXIT_FAILURE);
                         } else {
-                            // Parent process - wait for completion
                             int status;
                             waitpid(pid, &status, 0);
                             lastResult = WIFEXITED(status) && WEXITSTATUS(status) == 0;
@@ -384,9 +355,6 @@ int executeCommands(Command* commands, int n) {
     return prevCmd;
 }
 
-/**
- * Split input string into an array of tokens
- */
 char** splitinput(char *buff) {
     int i = 0;
     char *token;
@@ -402,9 +370,6 @@ char** splitinput(char *buff) {
     return tokens;
 }
 
-/**
- * Execute a single command
- */
 int executecmd(char** tokens) {
     if (tokens[0] == NULL) {  // Prevent executing an empty command
         return 1;
@@ -415,7 +380,6 @@ int executecmd(char** tokens) {
     if (strcmp(tokens[0], "!") == 0) {
         negate_result = 1;
         
-        // Shift all tokens to remove the "!" operator
         int i = 0;
         while (tokens[i] != NULL) {
             tokens[i] = tokens[i + 1];
@@ -430,14 +394,14 @@ int executecmd(char** tokens) {
 
     // Check for built-in functions
     if (checkAndExecuteInbuiltFunctions(tokens)) {
-        return negate_result ? 0 : 1;  // Negate if needed
+        return negate_result ? 0 : 1;  
     }
 
     // Execute external command
     pid_t pid = fork();
     if (pid == -1) {
         perror("fork failed");
-        return negate_result ? 1 : 0;  // Negate if needed
+        return negate_result ? 1 : 0;  
     }
 
     if (pid == 0) {
@@ -452,17 +416,13 @@ int executecmd(char** tokens) {
         int status;
         waitpid(pid, &status, 0);
         int result = WIFEXITED(status) && WEXITSTATUS(status) == 0;
-        return negate_result ? !result : result;  // Negate if needed
+        return negate_result ? !result : result;  
     }
 }
 
-/**
- * Check and execute built-in functions
- * Returns 1 if a built-in was executed, 0 otherwise
- */
+
 int checkAndExecuteInbuiltFunctions(char** tokens) {
     if (strcmp(tokens[0], "exit") == 0) {
-        // Handle exit with optional status code
         if (tokens[1] != NULL) {
             exit(atoi(tokens[1]));
         } else {
@@ -470,7 +430,6 @@ int checkAndExecuteInbuiltFunctions(char** tokens) {
         }
         return 1;
     } else if (strcmp(tokens[0], "cd") == 0) {
-        // Handle cd command
         if (tokens[1] == NULL) {
             fprintf(stderr, "Expected argument to \"cd\"\n");
         } else {
@@ -480,7 +439,6 @@ int checkAndExecuteInbuiltFunctions(char** tokens) {
         }
         return 1;
     } else if (strcmp(tokens[0], "echo") == 0) {
-        // Handle echo command
         int i = 1;
         int append_newline = 1;
         
@@ -506,7 +464,6 @@ int checkAndExecuteInbuiltFunctions(char** tokens) {
         
         return 1;
     } else if (strcmp(tokens[0], "echo-rot13") == 0) {
-        // Handle echo-rot13 command
         if (tokens[1] == NULL) {
             printf("\n");
         } else {
@@ -516,28 +473,22 @@ int checkAndExecuteInbuiltFunctions(char** tokens) {
         }
         return 1;
     } else if (strcmp(tokens[0], "exec") == 0) {
-        // Handle exec command
         if (tokens[1] == NULL) {
             fprintf(stderr, "exec: expected command\n");
             return 1;
         }
         
-        // Shift all tokens to remove "exec"
         char** newTokens = tokens + 1;
         if (execvp(newTokens[0], newTokens) == -1) {
             perror("exec failed");
             exit(EXIT_FAILURE);
         }
-        // Will never reach here if exec succeeds
         return 1;
     }
     
     return 0;
 }
 
-/**
- * ROT13 encryption/decryption for testing
- */
 void rot13(char *str) {
     if (!str) return;
     
@@ -550,9 +501,6 @@ void rot13(char *str) {
     }
 }
 
-/**
- * Main function
- */
 int main(int argc, char* argv[]) {
     cash();
     return 0;
